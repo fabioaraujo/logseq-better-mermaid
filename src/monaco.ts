@@ -4,6 +4,7 @@ import 'monaco-editor/min/vs/editor/editor.main.css'
 
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import { t } from './i18n'
 
 type MonacoOptions = {
   source: string
@@ -52,15 +53,15 @@ export function openMonacoEditor(options: MonacoOptions) {
   const overlay = document.createElement('div')
   overlay.className = 'bm-monaco-overlay'
   overlay.innerHTML = `
-    <section class="bm-monaco-panel" role="dialog" aria-label="Mermaid 源码编辑器">
+    <section class="bm-monaco-panel" role="dialog" aria-label="${t('editorTitle')}">
       <header class="bm-monaco-header">
-        <div><strong>Mermaid 源码</strong><span>Monaco Editor</span></div>
-        <div class="bm-monaco-hint">⌘/Ctrl + Enter 保存 · Esc 关闭</div>
+        <div><strong>${t('editorTitle')}</strong><span>${t('editorName')}</span></div>
+        <div class="bm-monaco-hint">${t('editorHint')}</div>
       </header>
       <div class="bm-monaco-editor"></div>
       <footer class="bm-monaco-footer">
-        <span class="bm-monaco-status">保存后自动重新渲染图表</span>
-        <div><button data-action="cancel">取消</button><button class="primary" data-action="save">保存</button></div>
+        <span class="bm-monaco-status">${t('editorStatus')}</span>
+        <div><button data-action="cancel">${t('cancel')}</button><button class="primary" data-action="save">${t('save')}</button></div>
       </footer>
     </section>`
   document.body.append(overlay)
@@ -111,7 +112,7 @@ export function openMonacoEditor(options: MonacoOptions) {
   const save = async () => {
     if (!activeEditor) return
     saveButton.disabled = true
-    status.textContent = '正在保存…'
+    status.textContent = t('saving')
     try {
       await options.onSave(activeEditor.getValue())
       close()

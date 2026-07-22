@@ -184,7 +184,7 @@ try {
   assert(decodedSources.some((source) => source.includes('知识库')))
   assert(decodedSources.some((source) => source.includes('旧插件')))
   assert(decodedSources.some((source) => source.includes('Note')))
-  await diagrams.getByText('Mermaid 语法错误', { exact: true }).waitFor()
+  await diagrams.locator('.better-mermaid__error').waitFor()
   assert.equal(await diagrams.getByRole('button', { name: 'SVG' }).count(), 4)
   assert.equal(await diagrams.getByRole('button', { name: 'PNG' }).count(), 4)
 
@@ -246,7 +246,7 @@ try {
 
   await firstViewport.dispatchEvent('wheel', { deltaY: -240 })
   assert((await scaleValue()) > initialScale, 'wheel up should zoom in')
-  await diagrams.getByRole('button', { name: '适应' }).first().click()
+  await diagrams.locator('[data-on-click="resetZoom"]').first().click()
 
   const canvas = diagrams.first().locator('.better-mermaid__canvas')
   const transformBeforeDrag = await canvas.evaluate(
@@ -278,11 +278,7 @@ try {
   await window.evaluate(() => {
     globalThis.__betterMermaidLoadingTransitions = 0
     globalThis.__betterMermaidObserver = new MutationObserver(() => {
-      if (
-        [...document.querySelectorAll('.better-mermaid__state')].some(
-          (element) => element.textContent?.includes('正在渲染 Mermaid'),
-        )
-      ) {
+      if (document.querySelector('.better-mermaid__loading')) {
         globalThis.__betterMermaidLoadingTransitions += 1
       }
     })
@@ -321,7 +317,7 @@ try {
       expected,
     viewStateBeforeRemount,
   )
-  await diagrams.getByRole('button', { name: '适应' }).first().click()
+  await diagrams.locator('[data-on-click="resetZoom"]').first().click()
   const firstDiagramBlock = diagrams
     .first()
     .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " ls-block ")][1]')
@@ -335,7 +331,7 @@ try {
   await firstDiagramSource.waitFor({ state: 'visible' })
   await window.waitForTimeout(400)
 
-  const sourceToggle = diagrams.getByRole('button', { name: '源码' }).first()
+  const sourceToggle = diagrams.locator('[data-on-click="toggleSource"]').first()
   await sourceToggle.click({ force: true })
   await firstDiagramSource.waitFor({ state: 'hidden' })
   await sourceToggle.click({ force: true })
@@ -345,7 +341,7 @@ try {
     .getByText('A[中文内容] --> B[Better Mermaid]', { exact: true })
     .evaluate((element) => element.closest('.ls-block')?.getAttribute('blockid'))
   assert(mermaidUuid)
-  await diagrams.getByRole('button', { name: '编辑' }).first().click()
+  await diagrams.locator('[data-on-click="editSource"]').first().click()
   const monacoEditor = pluginFrame.locator('.monaco-editor')
   await monacoEditor.waitFor({ state: 'visible', timeout: 20_000 })
   await pluginFrame.getByText('Monaco Editor', { exact: true }).waitFor()
@@ -359,7 +355,7 @@ try {
   await window.keyboard.insertText(
     'flowchart LR\n  A[实时刷新] --> B[Better Mermaid]',
   )
-  await pluginFrame.getByRole('button', { name: '保存', exact: true }).click()
+  await pluginFrame.locator('[data-action="save"]').click()
   await window.waitForFunction(
     () =>
       [...document.querySelectorAll('.better-mermaid img')].some((element) =>

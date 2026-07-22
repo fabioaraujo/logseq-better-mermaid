@@ -3,7 +3,17 @@
   "version": "0.1.3",
   "private": true,
   "description": "Reliable, theme-aware Mermaid diagrams for Logseq.",
+  "author": "MMMartt",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MMMartt/logseq-better-mermaid.git"
+  },
+  "homepage": "https://github.com/MMMartt/logseq-better-mermaid#readme",
+  "bugs": {
+    "url": "https://github.com/MMMartt/logseq-better-mermaid/issues"
+  },
+  "keywords": ["logseq", "logseq-plugin", "mermaid", "diagram", "monaco"],
   "type": "module",
   "main": "dist/index.html",
   "logseq": {

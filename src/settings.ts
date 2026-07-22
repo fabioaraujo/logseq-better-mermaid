@@ -1,14 +1,15 @@
 import type { SettingSchemaDesc } from '@logseq/libs/dist/LSPlugin'
 
 import type { PluginSettings, ThemeMode } from './types'
+import { t } from './i18n'
 
 export const settingsSchema: SettingSchemaDesc[] = [
   {
     key: 'theme',
     type: 'enum',
     default: 'follow-logseq',
-    title: '图表主题',
-    description: '默认跟随 Logseq 的明暗主题；Mermaid frontmatter 仍可覆盖单张图。',
+    title: t('themeTitle'),
+    description: t('themeDescription'),
     enumChoices: ['follow-logseq', 'default', 'dark', 'neutral', 'forest', 'base'],
     enumPicker: 'select',
   },
@@ -16,8 +17,8 @@ export const settingsSchema: SettingSchemaDesc[] = [
     key: 'securityLevel',
     type: 'enum',
     default: 'strict',
-    title: '安全级别',
-    description: 'strict 最安全；loose 允许 HTML 标签和可点击链接，仅用于可信笔记。',
+    title: t('securityTitle'),
+    description: t('securityDescription'),
     enumChoices: ['strict', 'loose'],
     enumPicker: 'select',
   },
@@ -25,15 +26,15 @@ export const settingsSchema: SettingSchemaDesc[] = [
     key: 'maxHeight',
     type: 'number',
     default: 720,
-    title: '最大显示高度',
-    description: '超过此高度后图表区域可滚动，单位为像素。',
+    title: t('maxHeightTitle'),
+    description: t('maxHeightDescription'),
   },
   {
     key: 'pngScale',
     type: 'number',
     default: 2,
-    title: 'PNG 导出倍率',
-    description: '建议 2；更高倍率更清晰，但会消耗更多内存。',
+    title: t('pngScaleTitle'),
+    description: t('pngScaleDescription'),
   },
 ]
 

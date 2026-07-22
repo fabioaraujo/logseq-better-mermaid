@@ -1,49 +1,58 @@
 # Better Mermaid for Logseq
 
-一个可靠、离线、跟随主题的 Logseq Mermaid 插件。
+A fast, offline, interactive Mermaid viewer and editor for Logseq.
 
-## 功能
+[简体中文](./README.zh-CN.md)
 
-- 使用 Mermaid 11 在本地生成 SVG，不访问在线渲染服务。
-- 支持 flowchart、sequence、class、state、ER、Gantt、mindmap、timeline 等 Mermaid 图表。
-- 跟随 Logseq 明暗主题，也可以在插件设置或 Mermaid frontmatter 中指定主题。
-- 内置 Monaco Editor；保存源码后自动刷新，语法错误直接显示在图表位置。
-- 支持鼠标滚轮缩放、拖拽平移、视图状态保持、SVG 导出和高清 PNG 导出。
-- 默认使用 Mermaid `strict` 安全级别；可信笔记可在设置中启用 `loose`。
-- 可继续显示旧插件留下的 `{{renderer :mermaid_UUID}}` 宏。
+![Better Mermaid in Logseq](./test-results/e2e/flowchart-light.png)
 
-## 使用
+## Features
 
-在 Logseq 中输入 `/Better Mermaid: 插入图表`。插件会创建：
+- Mermaid 11 rendering, fully local and offline.
+- Interactive canvas: wheel zoom, mouse drag to pan, double-click to fit, and persistent view state.
+- Built-in Monaco Editor with Mermaid highlighting, line numbers, search, and keyboard shortcuts.
+- Flowcharts, sequence, class, state, ER, Gantt, mindmap, timeline, pie, git graph, and more.
+- Automatic light/dark theme support, inline syntax errors, SVG export, and high-resolution PNG export.
+- English, Simplified Chinese, and Traditional Chinese UI following Logseq's preferred language.
+- Compatibility with `{{renderer :mermaid_UUID}}` macros left by older Mermaid plugins.
+
+## Usage
+
+Run `/Better Mermaid: Insert diagram` in Logseq. The plugin creates:
 
 ````markdown
 - {{renderer :better-mermaid}}
   - ```mermaid
     flowchart LR
-      A[想法] --> B[Better Mermaid]
+      A[Idea] --> B[Better Mermaid]
     ```
 ````
 
-Mermaid 源码放在 renderer 块的第一个 Mermaid 子代码块中。修改代码块后，图表会自动更新。
+The Mermaid source remains a standard child code block. Use **Edit** on the diagram toolbar to open Monaco Editor, or edit the child block directly.
 
-## 本地安装
+## Install from source
 
-1. 运行 `bun install && bun run build`。
-2. 在 Logseq 设置中启用 Developer mode。
-3. 打开 Plugins，选择 Load unpacked plugin，然后选择本仓库根目录。
+1. Run `bun install && bun run build`.
+2. Enable Developer mode in Logseq settings.
+3. Open Plugins, choose **Load unpacked plugin**, and select this repository.
 
-也可以解压 `release/logseq-better-mermaid-0.1.3.zip`，再通过 Load unpacked plugin 选择解压目录。
+Alternatively, download `logseq-better-mermaid-0.1.3.zip` from GitHub Releases and load its extracted directory.
 
-## 验证
+## Development
 
 ```bash
+bun install
 bun run test
 bun run build
 bun run test:e2e
 ```
 
-端到端测试会以 headless 模式启动隔离的 Logseq 0.10.12、创建临时 graph、加载未打包插件，并验证画布交互、Monaco 编辑、复杂图表、中文、错误提示、明暗主题以及 SVG/PNG 导出。测试不会显示窗口，也不会读写真实笔记 graph。
+The end-to-end suite starts an isolated Logseq 0.10.12 in headless mode. It does not display a window or access your real graph.
 
-## 隐私
+## Privacy and security
 
-插件不包含网络请求。Mermaid 引擎随插件一起打包，所有渲染和导出都在本机完成。
+Better Mermaid makes no network requests while rendering or editing. Mermaid and Monaco are bundled with the plugin. The default Mermaid security level is `strict`; enable `loose` only for trusted notes.
+
+## License
+
+[MIT](./LICENSE)

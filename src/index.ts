@@ -2,6 +2,7 @@ import '@logseq/libs'
 
 import { exportPng, exportSvg } from './export'
 import { stableId } from './html'
+import { setLocale, t } from './i18n'
 import { renderMermaid, type MermaidEngine } from './renderer'
 import { readSettings, settingsSchema } from './settings'
 import {
@@ -279,7 +280,7 @@ async function openSourceEditor(id: string) {
       dark: currentTheme === 'dark',
       async onSave(source) {
         const block = await logseq.Editor.getBlock(sourceBlockUuid)
-        if (!block) throw new Error('找不到 Mermaid 源码块')
+        if (!block) throw new Error(t('sourceMissing'))
         await logseq.Editor.updateBlock(
           sourceBlockUuid,
           replaceMermaidSource(getBlockText(block), source),
@@ -292,7 +293,7 @@ async function openSourceEditor(id: string) {
   } catch (error) {
     logseq.hideMainUI({ restoreEditingCursor: false })
     const message = error instanceof Error ? error.message : String(error)
-    logseq.UI.showMsg(`打开 Monaco 编辑器失败：${message}`, 'error')
+    logseq.UI.showMsg(`${t('editorOpenFailed')}: ${message}`, 'error')
   }
 }
 
@@ -312,6 +313,7 @@ async function main() {
   logseq.provideStyle(styles)
 
   const userConfig = await logseq.App.getUserConfigs()
+  setLocale(userConfig.preferredLanguage)
   currentTheme = userConfig.preferredThemeMode === 'dark' ? 'dark' : 'light'
 
   logseq.provideModel({
@@ -345,12 +347,12 @@ async function main() {
         await exportPng(snapshot.svg, snapshot.source, settings.pngScale)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        logseq.UI.showMsg(`PNG 导出失败：${message}`, 'error')
+        logseq.UI.showMsg(`${t('pngExportFailed')}: ${message}`, 'error')
       }
     },
   })
 
-  logseq.Editor.registerSlashCommand('Better Mermaid: 插入图表', async (event) => {
+  logseq.Editor.registerSlashCommand(t('slashInsert'), async (event) => {
     await logseq.Editor.insertAtEditingCursor('{{renderer :better-mermaid}}')
     await logseq.Editor.insertBlock(
       event.uuid,
@@ -402,7 +404,7 @@ async function main() {
   })
   logseq.onSettingsChanged(() => refreshAll(0))
 
-  logseq.UI.showMsg('Better Mermaid 已加载', 'success')
+  logseq.UI.showMsg(t('loaded'), 'success')
 }
 
 logseq.useSettingsSchema(settingsSchema)

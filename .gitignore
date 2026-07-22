@@ -3,6 +3,9 @@ dist/
 vendor/
 release/
 coverage/
-test-results/
+test-results/*
+!test-results/e2e/
+test-results/e2e/*
+!test-results/e2e/flowchart-light.png
 *.log
 .DS_Store

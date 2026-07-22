@@ -19,7 +19,13 @@ async function addPath(path) {
   }
 }
 
-for (const file of ['package.json', 'icon.svg', 'README.md', 'LICENSE']) {
+for (const file of [
+  'package.json',
+  'icon.svg',
+  'README.md',
+  'README.zh-CN.md',
+  'LICENSE',
+]) {
   files[basename(file)] = new Uint8Array(await readFile(join(root, file)))
 }
 await addPath(join(root, 'dist'))
