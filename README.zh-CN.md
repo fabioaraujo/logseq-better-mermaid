@@ -4,7 +4,7 @@
 
 [English](./README.md)
 
-![Better Mermaid 在 Logseq 中的效果](./test-results/e2e/flowchart-light.png)
+![Better Mermaid 在 Logseq 中的效果](./test-results/e2e/marketplace-showcase.png)
 
 ## 功能
 

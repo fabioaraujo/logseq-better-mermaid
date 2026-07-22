@@ -4,7 +4,7 @@ A fast, offline, interactive Mermaid viewer and editor for Logseq.
 
 [简体中文](./README.zh-CN.md)
 
-![Better Mermaid in Logseq](./test-results/e2e/flowchart-light.png)
+![Better Mermaid in Logseq](./test-results/e2e/marketplace-showcase.png)
 
 ## Features
 

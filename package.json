@@ -27,6 +27,7 @@
     "dev": "vite",
     "test": "vitest run",
     "test:e2e": "node scripts/e2e-smoke.mjs",
+    "capture:marketplace": "node scripts/capture-marketplace.mjs",
     "test:watch": "vitest",
     "package": "bun run build && node scripts/package.mjs"
   },
