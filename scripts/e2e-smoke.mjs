@@ -60,6 +60,7 @@ const journalFixture = [
     '    flowchart LR',
     '      A --',
     '    ```',
+    '- unrelated edit',
   '',
 ].join('\n')
 await writeFile(journalPath, journalFixture)
@@ -69,6 +70,9 @@ const app = await electron.launch({
   args: [`--user-data-dir=${profile}`, '--disable-gpu'],
   timeout: 30_000,
 })
+
+// Keep the real-app regression suite out of the user's foreground workspace.
+await app.evaluate(({ app }) => app.hide())
 
 await app.evaluate(
   ({ session }, directory) => {
@@ -144,10 +148,10 @@ try {
     },
     pluginPath,
   )
-  if ((await window.getByText('Better Mermaid0.1.0', { exact: true }).count()) === 0) {
+  if (!window.frames().some((frame) => frame.url().includes(pluginPath))) {
     await window.getByText('Load unpacked plugin', { exact: true }).click()
   }
-  await window.getByText('Better Mermaid0.1.0', { exact: true }).waitFor()
+  await window.getByText(/Better Mermaid0\.1\./).waitFor()
   await window.keyboard.press('Escape')
   await window.reload({ waitUntil: 'domcontentloaded' })
   await window.getByText('Jul 22nd, 2026', { exact: true }).waitFor()
@@ -170,6 +174,10 @@ try {
     { timeout: 20_000 },
   )
   assert.equal(await images.count(), 4)
+  const pluginFrame = window
+    .frames()
+    .find((frame) => frame.url().includes('/logseq-better-mermaid/dist/'))
+  assert(pluginFrame, 'Better Mermaid plugin frame should be available')
   const decodedSources = await images.evaluateAll((elements) =>
     elements.map((element) =>
       decodeURIComponent(element.getAttribute('src') ?? ''),
@@ -183,7 +191,84 @@ try {
   assert.equal(await diagrams.getByRole('button', { name: 'SVG' }).count(), 4)
   assert.equal(await diagrams.getByRole('button', { name: 'PNG' }).count(), 4)
 
-  await writeFile(journalPath, journalFixture.replace('中文内容', '实时刷新'))
+  const diagramWidth = await diagrams.first().evaluate((element) =>
+    element.getBoundingClientRect().width,
+  )
+  assert(
+    diagramWidth >= 700,
+    `diagram should use the block width, received ${diagramWidth}px`,
+  )
+
+  await window.evaluate(() => {
+    globalThis.__betterMermaidLoadingTransitions = 0
+    globalThis.__betterMermaidObserver = new MutationObserver(() => {
+      if (
+        [...document.querySelectorAll('.better-mermaid__state')].some(
+          (element) => element.textContent?.includes('正在渲染 Mermaid'),
+        )
+      ) {
+        globalThis.__betterMermaidLoadingTransitions += 1
+      }
+    })
+    globalThis.__betterMermaidObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+  })
+  await pluginFrame.evaluate(() => {
+    const host = globalThis.logseq.Experiments.ensureHostScope()
+    const originalRender = host.mermaid.render.bind(host.mermaid)
+    globalThis.__betterMermaidRenderCount = 0
+    host.mermaid.render = (...args) => {
+      globalThis.__betterMermaidRenderCount += 1
+      return originalRender(...args)
+    }
+  })
+
+  const unrelatedUuid = await window
+    .getByText('unrelated edit', { exact: true })
+    .evaluate((element) => element.closest('.ls-block')?.getAttribute('blockid'))
+  assert(unrelatedUuid)
+  await pluginFrame.evaluate(async ({ uuid }) => {
+    await globalThis.logseq.Editor.updateBlock(uuid, 'unrelated edit changed')
+  }, { uuid: unrelatedUuid })
+  await window.getByText('unrelated edit changed', { exact: true }).waitFor()
+  await window.waitForTimeout(800)
+  assert.equal(
+    await pluginFrame.evaluate(() => globalThis.__betterMermaidRenderCount),
+    0,
+    'an unrelated edit should not re-render Mermaid',
+  )
+  const firstDiagramBlock = diagrams
+    .first()
+    .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " ls-block ")][1]')
+  const firstDiagramSource = firstDiagramBlock.getByText('flowchart LR', {
+    exact: true,
+  })
+  const collapseControl = firstDiagramBlock.locator('.block-control').first()
+  await collapseControl.click()
+  await firstDiagramSource.waitFor({ state: 'hidden' })
+  await collapseControl.click()
+  await firstDiagramSource.waitFor({ state: 'visible' })
+
+  const sourceToggle = diagrams.getByRole('button', { name: '源码' }).first()
+  await sourceToggle.click({ force: true })
+  await firstDiagramSource.waitFor({ state: 'hidden' })
+  await sourceToggle.click({ force: true })
+  await firstDiagramSource.waitFor({ state: 'visible' })
+
+  const mermaidUuid = await window
+    .getByText('A[中文内容] --> B[Better Mermaid]', { exact: true })
+    .evaluate((element) => element.closest('.ls-block')?.getAttribute('blockid'))
+  assert(mermaidUuid)
+  await pluginFrame.evaluate(async ({ uuid }) => {
+    const block = await globalThis.logseq.Editor.getBlock(uuid)
+    const content = block?.title ?? block?.content ?? ''
+    await globalThis.logseq.Editor.updateBlock(
+      uuid,
+      content.replace('中文内容', '实时刷新'),
+    )
+  }, { uuid: mermaidUuid })
   await window.waitForFunction(
     () =>
       [...document.querySelectorAll('.better-mermaid img')].some((element) =>
@@ -191,6 +276,13 @@ try {
       ),
     undefined,
     { timeout: 20_000 },
+  )
+  assert.equal(
+    await window.evaluate(
+      () => globalThis.__betterMermaidLoadingTransitions,
+    ),
+    0,
+    'diagram updates should not flash a loading state',
   )
 
   await diagrams.getByRole('button', { name: 'SVG' }).first().click({ force: true })
@@ -237,7 +329,12 @@ try {
           'flowchart, mindmap, timeline, and class diagrams rendered',
           'Chinese and complex diagram labels rendered',
           'invalid syntax produced an inline error',
-          'file edits triggered an automatic re-render',
+          'diagram used the available block width',
+          'unrelated edits did not re-render Mermaid',
+          'the parent block collapsed and expanded normally',
+          'the source toolbar button collapsed and expanded source',
+          'diagram edits did not flash a loading state',
+          'Mermaid source edits triggered an automatic re-render',
           'SVG and PNG exports produced non-empty files',
           'light and dark theme screenshots captured',
           'no Better Mermaid console errors',

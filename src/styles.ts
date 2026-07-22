@@ -1,14 +1,31 @@
 export const styles = String.raw`
+/* Logseq places renderer UI inside an inline, shrink-to-fit slot. Expand only
+   the slot containing Better Mermaid so the diagram can use the block width. */
+span.inline:has(> .lsp-hook-ui-slot .better-mermaid),
+.lsp-hook-ui-slot:has(.better-mermaid),
+.lsp-hook-ui-slot:has(.better-mermaid) > div {
+  display: block !important;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
 .better-mermaid {
   position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   margin: 0.5rem 0;
   color: var(--ls-primary-text-color, #1f2937);
 }
 
 .better-mermaid__frame {
   position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   overflow: auto;
-  max-width: 100%;
   border: 1px solid transparent;
   border-radius: 8px;
   background: color-mix(in srgb, var(--ls-primary-background-color, white) 96%, transparent);
@@ -22,7 +39,9 @@ export const styles = String.raw`
 .better-mermaid__canvas {
   display: grid;
   place-items: center;
-  min-width: min-content;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   padding: 0.75rem;
   transform-origin: top left;
 }
@@ -35,10 +54,10 @@ export const styles = String.raw`
 }
 
 .better-mermaid__toolbar {
-  position: sticky;
+  position: absolute;
   z-index: 2;
   top: 0.35rem;
-  left: 100%;
+  right: 0.35rem;
   display: flex;
   width: max-content;
   justify-content: flex-end;

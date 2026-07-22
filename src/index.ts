@@ -20,16 +20,29 @@ import type {
 
 const registrations = new Map<string, DiagramRegistration>()
 const snapshots = new Map<string, DiagramSnapshot>()
+const diagramCache = new Map<
+  string,
+  { renderKey: string; source: string; svg: string; maxHeight: number }
+>()
+const errorCache = new Map<string, { renderKey: string; message: string }>()
 const generations = new Map<string, number>()
+const renderKeys = new Map<string, string>()
+const pendingRefreshes = new Set<string>()
 let currentTheme: ThemeMode = 'light'
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let mermaidEngine: MermaidEngine
 
+function forgetRegistration(id: string) {
+  registrations.delete(id)
+  snapshots.delete(id)
+  generations.delete(id)
+  renderKeys.delete(id)
+  pendingRefreshes.delete(id)
+}
+
 function provide(registration: DiagramRegistration, template: string) {
   if (!parent.document.getElementById(registration.slot)) {
-    registrations.delete(registration.id)
-    snapshots.delete(registration.id)
-    generations.delete(registration.id)
+    forgetRegistration(registration.id)
     return false
   }
   logseq.provideUI({
@@ -53,24 +66,96 @@ function isCurrent(id: string, generation: number) {
 
 async function renderRegistration(registration: DiagramRegistration) {
   const generation = nextGeneration(registration.id)
-  if (!provide(registration, loadingTemplate(registration.id))) return
-
-  const source = await findMermaidSource(
+  const sourceResult = await findMermaidSource(
     registration.blockUuid,
     (uuid, options) => logseq.Editor.getBlock(uuid, options),
   )
   if (!isCurrent(registration.id, generation)) return
 
-  if (!source) {
+  if (!sourceResult) {
+    if (renderKeys.get(registration.id) === 'empty') return
     snapshots.delete(registration.id)
+    renderKeys.set(registration.id, 'empty')
     provide(registration, emptyTemplate(registration.id))
     return
   }
 
+  registration.sourceBlockUuid = sourceResult.blockUuid
+  const settings = readSettings(logseq.settings ?? {})
+  const renderKey = JSON.stringify({
+    source: sourceResult.source,
+    settings,
+    theme: currentTheme,
+  })
+  if (renderKeys.get(registration.id) === renderKey) return
+
+  const cached = diagramCache.get(registration.blockUuid)
+  const cachedError = errorCache.get(registration.blockUuid)
+  if (cachedError?.renderKey === renderKey) {
+    snapshots.delete(registration.id)
+    renderKeys.set(registration.id, renderKey)
+    provide(
+      registration,
+      errorTemplate(registration.id, cachedError.message),
+    )
+    return
+  }
+  if (cached?.renderKey === renderKey) {
+    const snapshot: DiagramSnapshot = {
+      ...registration,
+      renderKey,
+      source: cached.source,
+      svg: cached.svg,
+      title: 'Mermaid diagram',
+    }
+    snapshots.set(registration.id, snapshot)
+    renderKeys.set(registration.id, renderKey)
+    provide(
+      registration,
+      diagramTemplate(registration.id, cached.svg, cached.maxHeight),
+    )
+    return
+  }
+
+  // On the first render we give immediate feedback. During subsequent edits,
+  // keep the old image in place and replace it only when the new SVG is ready.
+  if (!renderKeys.has(registration.id)) {
+    if (cached) {
+      const snapshot: DiagramSnapshot = {
+        ...registration,
+        renderKey: cached.renderKey,
+        source: cached.source,
+        svg: cached.svg,
+        title: 'Mermaid diagram',
+      }
+      snapshots.set(registration.id, snapshot)
+      renderKeys.set(registration.id, cached.renderKey)
+      if (
+        !provide(
+          registration,
+          diagramTemplate(registration.id, cached.svg, cached.maxHeight),
+        )
+      ) {
+        return
+      }
+    } else if (cachedError) {
+      renderKeys.set(registration.id, cachedError.renderKey)
+      if (
+        !provide(
+          registration,
+          errorTemplate(registration.id, cachedError.message),
+        )
+      ) {
+        return
+      }
+    } else if (!provide(registration, loadingTemplate(registration.id))) {
+      return
+    }
+  }
+
   try {
-    const settings = readSettings(logseq.settings ?? {})
     const svg = await renderMermaid(
-      source,
+      sourceResult.source,
       settings,
       currentTheme,
       mermaidEngine,
@@ -79,11 +164,20 @@ async function renderRegistration(registration: DiagramRegistration) {
 
     const snapshot: DiagramSnapshot = {
       ...registration,
-      source,
+      renderKey,
+      source: sourceResult.source,
       svg,
       title: 'Mermaid diagram',
     }
     snapshots.set(registration.id, snapshot)
+    diagramCache.set(registration.blockUuid, {
+      renderKey,
+      source: sourceResult.source,
+      svg,
+      maxHeight: settings.maxHeight,
+    })
+    errorCache.delete(registration.blockUuid)
+    renderKeys.set(registration.id, renderKey)
     provide(
       registration,
       diagramTemplate(registration.id, svg, settings.maxHeight),
@@ -92,16 +186,40 @@ async function renderRegistration(registration: DiagramRegistration) {
     if (!isCurrent(registration.id, generation)) return
     const message = error instanceof Error ? error.message : String(error)
     snapshots.delete(registration.id)
+    diagramCache.delete(registration.blockUuid)
+    errorCache.set(registration.blockUuid, { renderKey, message })
+    renderKeys.set(registration.id, renderKey)
     provide(registration, errorTemplate(registration.id, message))
   }
 }
 
 function refreshAll(delay = 120) {
+  for (const id of registrations.keys()) pendingRefreshes.add(id)
+  scheduleRefresh(delay)
+}
+
+function refreshChanged(changedBlockUuids: Set<string>, delay = 180) {
+  for (const registration of registrations.values()) {
+    if (
+      changedBlockUuids.has(registration.blockUuid) ||
+      (registration.sourceBlockUuid &&
+        changedBlockUuids.has(registration.sourceBlockUuid))
+    ) {
+      pendingRefreshes.add(registration.id)
+    }
+  }
+  if (pendingRefreshes.size > 0) scheduleRefresh(delay)
+}
+
+function scheduleRefresh(delay: number) {
   if (refreshTimer) clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
     refreshTimer = undefined
-    for (const registration of registrations.values()) {
-      void renderRegistration(registration)
+    const ids = [...pendingRefreshes]
+    pendingRefreshes.clear()
+    for (const id of ids) {
+      const registration = registrations.get(id)
+      if (registration) void renderRegistration(registration)
     }
   }, delay)
 }
@@ -154,6 +272,11 @@ async function main() {
     resetZoom(event: { dataset: DOMStringMap }) {
       setZoom(event.dataset.diagramId ?? '', 1)
     },
+    async toggleSource(event: { dataset: DOMStringMap }) {
+      const registration = registrations.get(event.dataset.diagramId ?? '')
+      if (!registration) return
+      await logseq.Editor.setBlockCollapsed(registration.blockUuid, 'toggle')
+    },
     exportSvg(event: { dataset: DOMStringMap }) {
       const snapshot = snapshots.get(event.dataset.diagramId ?? '')
       if (!snapshot) return
@@ -185,6 +308,15 @@ async function main() {
     const [type] = payload.arguments
     if (!isBetterMermaidMacro(type)) return
 
+    for (const existing of registrations.values()) {
+      if (
+        existing.blockUuid === payload.uuid &&
+        !parent.document.getElementById(existing.slot)
+      ) {
+        forgetRegistration(existing.id)
+      }
+    }
+
     const id = `better-mermaid-${stableId(`${slot}:${payload.uuid}`)}`
     const registration: DiagramRegistration = {
       id,
@@ -196,7 +328,10 @@ async function main() {
     void renderRegistration(registration)
   })
 
-  logseq.DB.onChanged(() => refreshAll())
+  logseq.DB.onChanged(({ blocks }) => {
+    const changedBlockUuids = new Set(blocks.map((block) => String(block.uuid)))
+    if (changedBlockUuids.size > 0) refreshChanged(changedBlockUuids)
+  })
   logseq.App.onThemeModeChanged(({ mode }) => {
     currentTheme = mode
     refreshAll(0)
@@ -204,7 +339,11 @@ async function main() {
   logseq.App.onCurrentGraphChanged(() => {
     registrations.clear()
     snapshots.clear()
+    diagramCache.clear()
+    errorCache.clear()
     generations.clear()
+    renderKeys.clear()
+    pendingRefreshes.clear()
   })
   logseq.onSettingsChanged(() => refreshAll(0))
 

@@ -32,12 +32,12 @@ export async function findMermaidSource(
     uuid: string,
     options?: { includeChildren: boolean },
   ) => Promise<BlockEntity | null>,
-): Promise<string | null> {
+): Promise<{ source: string; blockUuid: string } | null> {
   const root = await getBlock(rootUuid, { includeChildren: true })
   if (!root) return null
 
   const rootSource = extractMermaidSource(getBlockText(root))
-  if (rootSource) return rootSource
+  if (rootSource) return { source: rootSource, blockUuid: String(root.uuid) }
 
   for (const child of root.children ?? []) {
     const resolved = isBlockEntity(child)
@@ -46,7 +46,7 @@ export async function findMermaidSource(
     if (!resolved) continue
 
     const source = extractMermaidSource(getBlockText(resolved))
-    if (source) return source
+    if (source) return { source, blockUuid: String(resolved.uuid) }
   }
 
   return null

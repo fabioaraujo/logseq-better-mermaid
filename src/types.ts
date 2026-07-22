@@ -7,9 +7,11 @@ export type DiagramRegistration = {
   key: string
   slot: string
   blockUuid: string
+  sourceBlockUuid?: string
 }
 
 export type DiagramSnapshot = DiagramRegistration & {
+  renderKey: string
   source: string
   svg: string
   title: string

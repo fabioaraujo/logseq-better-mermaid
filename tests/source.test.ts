@@ -46,9 +46,10 @@ describe('findMermaidSource', () => {
     } as unknown as BlockEntity
     const getBlock = vi.fn(async () => root)
 
-    await expect(findMermaidSource('root', getBlock)).resolves.toBe(
-      'mindmap\n  root((知识))',
-    )
+    await expect(findMermaidSource('root', getBlock)).resolves.toEqual({
+      source: 'mindmap\n  root((知识))',
+      blockUuid: 'child',
+    })
     expect(getBlock).toHaveBeenCalledWith('root', { includeChildren: true })
   })
 
@@ -66,9 +67,10 @@ describe('findMermaidSource', () => {
       uuid === 'root' ? root : child,
     )
 
-    await expect(findMermaidSource('root', getBlock)).resolves.toContain(
-      'timeline',
-    )
+    await expect(findMermaidSource('root', getBlock)).resolves.toEqual({
+      source: 'timeline\n  2026 : Better Mermaid',
+      blockUuid: 'child',
+    })
   })
 })
 

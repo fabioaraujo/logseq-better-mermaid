@@ -32,7 +32,7 @@ Mermaid 源码放在 renderer 块的第一个 Mermaid 子代码块中。修改�
 2. 在 Logseq 设置中启用 Developer mode。
 3. 打开 Plugins，选择 Load unpacked plugin，然后选择本仓库根目录。
 
-也可以解压 `release/logseq-better-mermaid-0.1.0.zip`，再通过 Load unpacked plugin 选择解压目录。
+也可以解压 `release/logseq-better-mermaid-0.1.1.zip`，再通过 Load unpacked plugin 选择解压目录。
 
 ## 验证
 

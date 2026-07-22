@@ -21,6 +21,7 @@ export function diagramTemplate(id: string, svg: string, maxHeight: number): str
           <button class="better-mermaid__button" data-on-click="zoomOut" data-diagram-id="${id}" title="缩小">−</button>
           <button class="better-mermaid__button" data-on-click="resetZoom" data-diagram-id="${id}" title="适应宽度">适应</button>
           <button class="better-mermaid__button" data-on-click="zoomIn" data-diagram-id="${id}" title="放大">＋</button>
+          <button class="better-mermaid__button" data-on-click="toggleSource" data-diagram-id="${id}" title="收起或展开 Mermaid 源码">源码</button>
           <button class="better-mermaid__button" data-on-click="exportSvg" data-diagram-id="${id}">SVG</button>
           <button class="better-mermaid__button" data-on-click="exportPng" data-diagram-id="${id}">PNG</button>
         </div>
