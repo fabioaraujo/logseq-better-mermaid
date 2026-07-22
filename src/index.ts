@@ -4,7 +4,12 @@ import { exportPng, exportSvg } from './export'
 import { stableId } from './html'
 import { renderMermaid, type MermaidEngine } from './renderer'
 import { readSettings, settingsSchema } from './settings'
-import { findMermaidSource, isBetterMermaidMacro } from './source'
+import {
+  findMermaidSource,
+  getBlockText,
+  isBetterMermaidMacro,
+  replaceMermaidSource,
+} from './source'
 import { styles } from './styles'
 import {
   diagramTemplate,
@@ -17,6 +22,7 @@ import type {
   DiagramSnapshot,
   ThemeMode,
 } from './types'
+import { bindViewer } from './viewer'
 
 const registrations = new Map<string, DiagramRegistration>()
 const snapshots = new Map<string, DiagramSnapshot>()
@@ -28,6 +34,7 @@ const errorCache = new Map<string, { renderKey: string; message: string }>()
 const generations = new Map<string, number>()
 const renderKeys = new Map<string, string>()
 const pendingRefreshes = new Set<string>()
+const editorDrafts = new Map<string, string>()
 let currentTheme: ThemeMode = 'light'
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let mermaidEngine: MermaidEngine
@@ -51,6 +58,18 @@ function provide(registration: DiagramRegistration, template: string) {
     reset: true,
     template,
   })
+  setTimeout(() => {
+    const root = findDiagramElement(registration.id)
+    if (root) {
+      bindViewer(root)
+      if (
+        registration.sourceBlockUuid &&
+        editorDrafts.has(registration.sourceBlockUuid)
+      ) {
+        openSourceEditor(registration.id)
+      }
+    }
+  }, 0)
   return true
 }
 
@@ -228,20 +247,106 @@ function findDiagramElement(id: string): HTMLElement | null {
   return parent.document.getElementById(id)
 }
 
-function setZoom(id: string, nextZoom: number) {
+function viewerFor(id: string) {
   const root = findDiagramElement(id)
-  const canvas = root?.querySelector<HTMLElement>('.better-mermaid__canvas')
-  if (!root || !canvas) return
-
-  const zoom = Math.min(4, Math.max(0.25, nextZoom))
-  root.dataset.zoom = String(zoom)
-  canvas.style.zoom = String(zoom)
+  return root ? bindViewer(root) : null
 }
 
-function changeZoom(id: string, delta: number) {
+function closeSourceEditor(id: string, discardDraft = true) {
+  const registration = registrations.get(id)
+  if (discardDraft && registration?.sourceBlockUuid) {
+    editorDrafts.delete(registration.sourceBlockUuid)
+  }
+  findDiagramElement(id)
+    ?.querySelector<HTMLElement>('.better-mermaid__editor')
+    ?.remove()
+}
+
+function openSourceEditor(id: string) {
+  const registration = registrations.get(id)
+  const snapshot = snapshots.get(id)
   const root = findDiagramElement(id)
-  const current = Number(root?.dataset.zoom ?? 1)
-  setZoom(id, current + delta)
+  if (!registration?.sourceBlockUuid || !snapshot || !root) return
+
+  const existing = root.querySelector<HTMLTextAreaElement>(
+    '.better-mermaid__editor-textarea',
+  )
+  if (existing) {
+    existing.focus()
+    return
+  }
+
+  const editor = parent.document.createElement('div')
+  editor.className = 'better-mermaid__editor'
+  const header = parent.document.createElement('div')
+  header.className = 'better-mermaid__editor-header'
+  const title = parent.document.createElement('strong')
+  title.textContent = '编辑 Mermaid 源码'
+  const hint = parent.document.createElement('span')
+  hint.textContent = '⌘/Ctrl + Enter 保存 · Esc 取消'
+  header.append(title, hint)
+
+  const textarea = parent.document.createElement('textarea')
+  textarea.className = 'better-mermaid__editor-textarea'
+  textarea.value =
+    editorDrafts.get(registration.sourceBlockUuid) ?? snapshot.source
+  editorDrafts.set(registration.sourceBlockUuid, textarea.value)
+  textarea.spellcheck = false
+  textarea.setAttribute('aria-label', 'Mermaid 源码编辑器')
+
+  const actions = parent.document.createElement('div')
+  actions.className = 'better-mermaid__editor-actions'
+  const cancel = parent.document.createElement('button')
+  cancel.className = 'better-mermaid__button'
+  cancel.textContent = '取消'
+  const save = parent.document.createElement('button')
+  save.className = 'better-mermaid__button better-mermaid__button--primary'
+  save.textContent = '保存'
+  actions.append(cancel, save)
+  editor.append(header, textarea, actions)
+  root.append(editor)
+
+  const saveSource = async () => {
+    save.disabled = true
+    const draft = textarea.value
+    editorDrafts.delete(registration.sourceBlockUuid!)
+    closeSourceEditor(id, false)
+    try {
+      const block = await logseq.Editor.getBlock(registration.sourceBlockUuid!)
+      if (!block) throw new Error('找不到 Mermaid 源码块')
+      await logseq.Editor.updateBlock(
+        registration.sourceBlockUuid!,
+        replaceMermaidSource(getBlockText(block), draft),
+      )
+    } catch (error) {
+      editorDrafts.set(registration.sourceBlockUuid!, draft)
+      openSourceEditor(id)
+      const message = error instanceof Error ? error.message : String(error)
+      logseq.UI.showMsg(`保存 Mermaid 失败：${message}`, 'error')
+    }
+  }
+
+  cancel.addEventListener('click', () => closeSourceEditor(id))
+  save.addEventListener('click', () => void saveSource())
+  textarea.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSourceEditor(id)
+    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault()
+      void saveSource()
+    } else if (event.key === 'Tab') {
+      event.preventDefault()
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      textarea.setRangeText('  ', start, end, 'end')
+      editorDrafts.set(registration.sourceBlockUuid!, textarea.value)
+    }
+  })
+  textarea.addEventListener('input', () => {
+    editorDrafts.set(registration.sourceBlockUuid!, textarea.value)
+  })
+  textarea.focus()
 }
 
 async function main() {
@@ -264,13 +369,16 @@ async function main() {
 
   logseq.provideModel({
     zoomIn(event: { dataset: DOMStringMap }) {
-      changeZoom(event.dataset.diagramId ?? '', 0.25)
+      viewerFor(event.dataset.diagramId ?? '')?.zoomBy(1.25)
     },
     zoomOut(event: { dataset: DOMStringMap }) {
-      changeZoom(event.dataset.diagramId ?? '', -0.25)
+      viewerFor(event.dataset.diagramId ?? '')?.zoomBy(0.8)
     },
     resetZoom(event: { dataset: DOMStringMap }) {
-      setZoom(event.dataset.diagramId ?? '', 1)
+      viewerFor(event.dataset.diagramId ?? '')?.fit()
+    },
+    editSource(event: { dataset: DOMStringMap }) {
+      openSourceEditor(event.dataset.diagramId ?? '')
     },
     async toggleSource(event: { dataset: DOMStringMap }) {
       const registration = registrations.get(event.dataset.diagramId ?? '')
@@ -341,6 +449,7 @@ async function main() {
     snapshots.clear()
     diagramCache.clear()
     errorCache.clear()
+    editorDrafts.clear()
     generations.clear()
     renderKeys.clear()
     pendingRefreshes.clear()

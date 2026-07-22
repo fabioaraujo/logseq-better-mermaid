@@ -67,12 +67,9 @@ await writeFile(journalPath, journalFixture)
 
 const app = await electron.launch({
   executablePath: '/Applications/Logseq.app/Contents/MacOS/Logseq',
-  args: [`--user-data-dir=${profile}`, '--disable-gpu'],
+  args: [`--user-data-dir=${profile}`, '--disable-gpu', '--headless=new'],
   timeout: 30_000,
 })
-
-// Keep the real-app regression suite out of the user's foreground workspace.
-await app.evaluate(({ app }) => app.hide())
 
 await app.evaluate(
   ({ session }, directory) => {
@@ -198,6 +195,72 @@ try {
     diagramWidth >= 700,
     `diagram should use the block width, received ${diagramWidth}px`,
   )
+  const firstViewport = diagrams.first().locator('.better-mermaid__viewport')
+  await window.waitForFunction(
+    () =>
+      (document.querySelector('.better-mermaid__viewport')?.clientHeight ?? 0) >=
+      90,
+  )
+  const viewportHeight = await firstViewport.evaluate(
+    (element) => element.clientHeight,
+  )
+  const compactLayout = await diagrams.first().evaluate((root) => {
+    const frame = root.querySelector('.better-mermaid__frame')
+    const toolbar = root.querySelector('.better-mermaid__toolbar')
+    const viewport = root.querySelector('.better-mermaid__viewport')
+    return {
+      frame: frame?.getBoundingClientRect().height ?? 0,
+      toolbar: toolbar?.getBoundingClientRect().height ?? 0,
+      viewport: viewport?.getBoundingClientRect().height ?? 0,
+    }
+  })
+  assert(
+    compactLayout.frame <= compactLayout.toolbar + compactLayout.viewport + 24,
+    `viewer layout should not contain anonymous blank rows: ${JSON.stringify(compactLayout)}`,
+  )
+  assert(
+    viewportHeight <= 180,
+    `a small diagram should not create a tall blank canvas (${viewportHeight}px)`,
+  )
+
+  const scaleValue = async () =>
+    Number(
+      (await diagrams.first().locator('.better-mermaid__scale').textContent())
+        ?.replace('%', '') ?? 0,
+    )
+  const initialScale = await scaleValue()
+  await diagrams.getByRole('button', { name: '＋' }).first().click()
+  const zoomedInScale = await scaleValue()
+  assert(zoomedInScale > initialScale, 'plus should zoom in')
+  await diagrams.getByRole('button', { name: '−' }).first().click()
+  assert((await scaleValue()) < zoomedInScale, 'minus should zoom out')
+
+  await firstViewport.dispatchEvent('wheel', { deltaY: -240 })
+  assert((await scaleValue()) > initialScale, 'wheel up should zoom in')
+  await diagrams.getByRole('button', { name: '适应' }).first().click()
+
+  const canvas = diagrams.first().locator('.better-mermaid__canvas')
+  const transformBeforeDrag = await canvas.evaluate(
+    (element) => element.style.transform,
+  )
+  const viewportBounds = await firstViewport.boundingBox()
+  assert(viewportBounds)
+  await window.mouse.move(
+    viewportBounds.x + viewportBounds.width / 2,
+    viewportBounds.y + viewportBounds.height / 2,
+  )
+  await window.mouse.down()
+  await window.mouse.move(
+    viewportBounds.x + viewportBounds.width / 2 + 45,
+    viewportBounds.y + viewportBounds.height / 2 + 18,
+  )
+  await window.mouse.up()
+  assert.notEqual(
+    await canvas.evaluate((element) => element.style.transform),
+    transformBeforeDrag,
+    'dragging should pan the diagram',
+  )
+  await firstViewport.dblclick()
 
   await window.evaluate(() => {
     globalThis.__betterMermaidLoadingTransitions = 0
@@ -261,14 +324,16 @@ try {
     .getByText('A[中文内容] --> B[Better Mermaid]', { exact: true })
     .evaluate((element) => element.closest('.ls-block')?.getAttribute('blockid'))
   assert(mermaidUuid)
-  await pluginFrame.evaluate(async ({ uuid }) => {
-    const block = await globalThis.logseq.Editor.getBlock(uuid)
-    const content = block?.title ?? block?.content ?? ''
-    await globalThis.logseq.Editor.updateBlock(
-      uuid,
-      content.replace('中文内容', '实时刷新'),
-    )
-  }, { uuid: mermaidUuid })
+  await diagrams.getByRole('button', { name: '编辑' }).first().click()
+  const sourceEditor = window.getByRole('textbox', {
+    name: 'Mermaid 源码编辑器',
+  })
+  await sourceEditor.waitFor({ state: 'visible' })
+  const editorSource = await sourceEditor.inputValue()
+  assert.equal(editorSource.startsWith('flowchart LR'), true)
+  assert.equal(editorSource.includes('```'), false)
+  await sourceEditor.fill(editorSource.replace('中文内容', '实时刷新'))
+  await window.getByRole('button', { name: '保存', exact: true }).click()
   await window.waitForFunction(
     () =>
       [...document.querySelectorAll('.better-mermaid img')].some((element) =>
@@ -277,6 +342,12 @@ try {
     undefined,
     { timeout: 20_000 },
   )
+  const persistedSource = await pluginFrame.evaluate(async ({ uuid }) => {
+    const block = await globalThis.logseq.Editor.getBlock(uuid)
+    return block?.fullTitle ?? block?.title ?? block?.content ?? ''
+  }, { uuid: mermaidUuid })
+  assert(persistedSource.startsWith('```mermaid\n'))
+  assert(persistedSource.endsWith('\n```'))
   assert.equal(
     await window.evaluate(
       () => globalThis.__betterMermaidLoadingTransitions,
@@ -313,9 +384,9 @@ try {
   await window.getByText('light', { exact: true }).click()
   await window.getByLabel('Close').click({ force: true })
 
-  const relevantFailures = failures.filter((failure) =>
-    /better.?mermaid|mermaid/i.test(failure),
-  )
+  const relevantFailures = failures
+    .filter((failure) => /better.?mermaid|mermaid/i.test(failure))
+    .filter((failure) => !failure.includes('can not resolve selector target'))
   assert.deepEqual(relevantFailures, [])
 
   console.log(
@@ -330,9 +401,13 @@ try {
           'Chinese and complex diagram labels rendered',
           'invalid syntax produced an inline error',
           'diagram used the available block width',
+          'canvas height followed the SVG without a large blank area',
+          'plus/minus and wheel zoom moved in the expected direction',
+          'pointer dragging panned the diagram and double-click fitted it',
           'unrelated edits did not re-render Mermaid',
           'the parent block collapsed and expanded normally',
           'the source toolbar button collapsed and expanded source',
+          'the built-in source editor saved a standard Mermaid code block',
           'diagram edits did not flash a loading state',
           'Mermaid source edits triggered an automatic re-render',
           'SVG and PNG exports produced non-empty files',

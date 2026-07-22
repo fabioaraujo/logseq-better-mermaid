@@ -22,6 +22,13 @@ export function extractMermaidSource(raw: string): string | null {
   return null
 }
 
+export function replaceMermaidSource(raw: string, source: string): string {
+  const fenced = `\`\`\`mermaid\n${source.trim()}\n\`\`\``
+  if (MERMAID_FENCE.test(raw)) return raw.replace(MERMAID_FENCE, fenced)
+  if (raw.trim().match(ANY_FENCE)) return fenced
+  return fenced
+}
+
 function isBlockEntity(value: unknown): value is BlockEntity {
   return Boolean(value && typeof value === 'object' && 'uuid' in value)
 }

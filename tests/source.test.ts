@@ -4,6 +4,7 @@ import {
   extractMermaidSource,
   findMermaidSource,
   isBetterMermaidMacro,
+  replaceMermaidSource,
 } from '../src/source'
 
 describe('extractMermaidSource', () => {
@@ -71,6 +72,23 @@ describe('findMermaidSource', () => {
       source: 'timeline\n  2026 : Better Mermaid',
       blockUuid: 'child',
     })
+  })
+})
+
+describe('replaceMermaidSource', () => {
+  it('keeps the child as a standard Mermaid code block', () => {
+    expect(
+      replaceMermaidSource(
+        '```mermaid\nflowchart LR\n  A --> B\n```',
+        'flowchart TD\n  C --> D',
+      ),
+    ).toBe('```mermaid\nflowchart TD\n  C --> D\n```')
+  })
+
+  it('upgrades a generic fence to a Mermaid fence', () => {
+    expect(replaceMermaidSource('```\ngraph LR\nA-->B\n```', 'graph TD\nA-->B')).toBe(
+      '```mermaid\ngraph TD\nA-->B\n```',
+    )
   })
 })
 
