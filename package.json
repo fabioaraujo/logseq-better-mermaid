@@ -1,0 +1,36 @@
+{
+  "name": "logseq-better-mermaid",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reliable, theme-aware Mermaid diagrams for Logseq.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.html",
+  "logseq": {
+    "id": "logseq-better-mermaid",
+    "title": "Better Mermaid",
+    "icon": "./icon.svg",
+    "main": "dist/index.html"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && vite build && node scripts/copy-mermaid.mjs",
+    "dev": "vite",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e-smoke.mjs",
+    "test:watch": "vitest",
+    "package": "bun run build && node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@logseq/libs": "0.2.12",
+    "mermaid": "11.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fflate": "0.8.2",
+    "jsdom": "^26.1.0",
+    "playwright-core": "1.61.1",
+    "typescript": "^5.8.0",
+    "vite": "^7.3.0",
+    "vitest": "^4.1.0"
+  }
+}
