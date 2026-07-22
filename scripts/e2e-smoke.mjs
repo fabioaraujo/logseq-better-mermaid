@@ -195,6 +195,15 @@ try {
     diagramWidth >= 700,
     `diagram should use the block width, received ${diagramWidth}px`,
   )
+  const rendererTopGap = await diagrams.first().evaluate((element) => {
+    const slot = element.closest('.lsp-hook-ui-slot')
+    if (!slot) return Number.POSITIVE_INFINITY
+    return element.getBoundingClientRect().top - slot.getBoundingClientRect().top
+  })
+  assert(
+    rendererTopGap <= 2,
+    `renderer slot should not create a blank row above the canvas (${rendererTopGap}px)`,
+  )
   const firstViewport = diagrams.first().locator('.better-mermaid__viewport')
   await window.waitForFunction(
     () =>
@@ -215,7 +224,7 @@ try {
     }
   })
   assert(
-    compactLayout.frame <= compactLayout.toolbar + compactLayout.viewport + 24,
+    compactLayout.frame <= compactLayout.viewport + 2,
     `viewer layout should not contain anonymous blank rows: ${JSON.stringify(compactLayout)}`,
   )
   assert(
@@ -261,6 +270,10 @@ try {
     'dragging should pan the diagram',
   )
   await firstViewport.dblclick()
+  await diagrams.getByRole('button', { name: '＋' }).first().click()
+  const viewStateBeforeRemount = await canvas.evaluate(
+    (element) => element.style.transform,
+  )
 
   await window.evaluate(() => {
     globalThis.__betterMermaidLoadingTransitions = 0
@@ -302,6 +315,13 @@ try {
     0,
     'an unrelated edit should not re-render Mermaid',
   )
+  await window.waitForFunction(
+    (expected) =>
+      document.querySelector('.better-mermaid__canvas')?.style.transform ===
+      expected,
+    viewStateBeforeRemount,
+  )
+  await diagrams.getByRole('button', { name: '适应' }).first().click()
   const firstDiagramBlock = diagrams
     .first()
     .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " ls-block ")][1]')
@@ -313,6 +333,7 @@ try {
   await firstDiagramSource.waitFor({ state: 'hidden' })
   await collapseControl.click()
   await firstDiagramSource.waitFor({ state: 'visible' })
+  await window.waitForTimeout(400)
 
   const sourceToggle = diagrams.getByRole('button', { name: '源码' }).first()
   await sourceToggle.click({ force: true })
@@ -325,15 +346,20 @@ try {
     .evaluate((element) => element.closest('.ls-block')?.getAttribute('blockid'))
   assert(mermaidUuid)
   await diagrams.getByRole('button', { name: '编辑' }).first().click()
-  const sourceEditor = window.getByRole('textbox', {
-    name: 'Mermaid 源码编辑器',
+  const monacoEditor = pluginFrame.locator('.monaco-editor')
+  await monacoEditor.waitFor({ state: 'visible', timeout: 20_000 })
+  await pluginFrame.getByText('Monaco Editor', { exact: true }).waitFor()
+  await window.screenshot({
+    path: join(resultsPath, 'monaco-editor.png'),
+    fullPage: true,
   })
-  await sourceEditor.waitFor({ state: 'visible' })
-  const editorSource = await sourceEditor.inputValue()
-  assert.equal(editorSource.startsWith('flowchart LR'), true)
-  assert.equal(editorSource.includes('```'), false)
-  await sourceEditor.fill(editorSource.replace('中文内容', '实时刷新'))
-  await window.getByRole('button', { name: '保存', exact: true }).click()
+  const monacoInput = monacoEditor.locator('textarea.inputarea')
+  await monacoInput.click({ force: true })
+  await window.keyboard.press('Meta+A')
+  await window.keyboard.insertText(
+    'flowchart LR\n  A[实时刷新] --> B[Better Mermaid]',
+  )
+  await pluginFrame.getByRole('button', { name: '保存', exact: true }).click()
   await window.waitForFunction(
     () =>
       [...document.querySelectorAll('.better-mermaid img')].some((element) =>
@@ -404,10 +430,11 @@ try {
           'canvas height followed the SVG without a large blank area',
           'plus/minus and wheel zoom moved in the expected direction',
           'pointer dragging panned the diagram and double-click fitted it',
+          'zoom and pan state survived a Logseq renderer remount',
           'unrelated edits did not re-render Mermaid',
           'the parent block collapsed and expanded normally',
           'the source toolbar button collapsed and expanded source',
-          'the built-in source editor saved a standard Mermaid code block',
+          'Monaco Editor saved a standard Mermaid code block',
           'diagram edits did not flash a loading state',
           'Mermaid source edits triggered an automatic re-render',
           'SVG and PNG exports produced non-empty files',

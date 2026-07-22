@@ -8,9 +8,11 @@ type ViewerState = {
   minScale: number
   x: number
   y: number
+  viewportHeight: number
 }
 
 const controllers = new WeakMap<HTMLElement, ViewerController>()
+const savedStates = new Map<string, ViewerState>()
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))
@@ -38,12 +40,21 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
   const diagramWidth = Number(image.dataset.width) || 300
   const diagramHeight = Number(image.dataset.height) || 150
   const maxHeight = Number(viewport.dataset.maxHeight) || 720
-  const state: ViewerState = { scale: 1, minScale: 0.1, x: 0, y: 0 }
+  const viewKey = root.dataset.viewKey ?? root.id
+  const state: ViewerState = savedStates.get(viewKey) ?? {
+    scale: 1,
+    minScale: 0.1,
+    x: 0,
+    y: 0,
+    viewportHeight: 120,
+  }
   let dragStart: { pointerX: number; pointerY: number; x: number; y: number } | null = null
 
   function render() {
+    viewport.style.height = `${Math.ceil(state.viewportHeight)}px`
     canvas.style.transform = `translate3d(${state.x}px, ${state.y}px, 0) scale(${state.scale})`
     if (scaleLabel) scaleLabel.textContent = `${Math.round(state.scale * 100)}%`
+    savedStates.set(viewKey, { ...state })
   }
 
   function fit() {
@@ -59,7 +70,7 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
     const fittedWidth = diagramWidth * scale
     const fittedHeight = diagramHeight * scale
     const viewportHeight = clamp(fittedHeight + 24, 96, maxHeight)
-    viewport.style.height = `${Math.ceil(viewportHeight)}px`
+    state.viewportHeight = viewportHeight
     state.x = Math.max(12, (viewport.clientWidth - fittedWidth) / 2)
     state.y = Math.max(12, (viewportHeight - fittedHeight) / 2)
     render()
@@ -94,12 +105,15 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
     'wheel',
     (event) => {
       event.preventDefault()
+      event.stopPropagation()
       zoomAt(Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY)
     },
-    { passive: false },
+    { capture: true, passive: false },
   )
   viewport.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
     dragStart = {
       pointerX: event.clientX,
       pointerY: event.clientY,
@@ -108,25 +122,32 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
     }
     viewport.classList.add('is-dragging')
     viewport.setPointerCapture(event.pointerId)
-  })
+  }, { capture: true })
   viewport.addEventListener('pointermove', (event) => {
     if (!dragStart) return
+    event.preventDefault()
+    event.stopPropagation()
     state.x = dragStart.x + event.clientX - dragStart.pointerX
     state.y = dragStart.y + event.clientY - dragStart.pointerY
     render()
-  })
+  }, { capture: true })
   const stopDragging = (event: PointerEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
     dragStart = null
     viewport.classList.remove('is-dragging')
     if (viewport.hasPointerCapture(event.pointerId)) {
       viewport.releasePointerCapture(event.pointerId)
     }
   }
-  viewport.addEventListener('pointerup', stopDragging)
-  viewport.addEventListener('pointercancel', stopDragging)
+  viewport.addEventListener('pointerup', stopDragging, { capture: true })
+  viewport.addEventListener('pointercancel', stopDragging, { capture: true })
   viewport.addEventListener('dblclick', fit)
 
-  requestAnimationFrame(fit)
+  requestAnimationFrame(() => {
+    if (savedStates.has(viewKey)) render()
+    else fit()
+  })
   return controller
 }
 

@@ -34,7 +34,6 @@ const errorCache = new Map<string, { renderKey: string; message: string }>()
 const generations = new Map<string, number>()
 const renderKeys = new Map<string, string>()
 const pendingRefreshes = new Set<string>()
-const editorDrafts = new Map<string, string>()
 let currentTheme: ThemeMode = 'light'
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let mermaidEngine: MermaidEngine
@@ -60,15 +59,7 @@ function provide(registration: DiagramRegistration, template: string) {
   })
   setTimeout(() => {
     const root = findDiagramElement(registration.id)
-    if (root) {
-      bindViewer(root)
-      if (
-        registration.sourceBlockUuid &&
-        editorDrafts.has(registration.sourceBlockUuid)
-      ) {
-        openSourceEditor(registration.id)
-      }
-    }
+    if (root) bindViewer(root)
   }, 0)
   return true
 }
@@ -131,7 +122,12 @@ async function renderRegistration(registration: DiagramRegistration) {
     renderKeys.set(registration.id, renderKey)
     provide(
       registration,
-      diagramTemplate(registration.id, cached.svg, cached.maxHeight),
+      diagramTemplate(
+        registration.id,
+        cached.svg,
+        cached.maxHeight,
+        registration.blockUuid,
+      ),
     )
     return
   }
@@ -152,7 +148,12 @@ async function renderRegistration(registration: DiagramRegistration) {
       if (
         !provide(
           registration,
-          diagramTemplate(registration.id, cached.svg, cached.maxHeight),
+          diagramTemplate(
+            registration.id,
+            cached.svg,
+            cached.maxHeight,
+            registration.blockUuid,
+          ),
         )
       ) {
         return
@@ -199,7 +200,12 @@ async function renderRegistration(registration: DiagramRegistration) {
     renderKeys.set(registration.id, renderKey)
     provide(
       registration,
-      diagramTemplate(registration.id, svg, settings.maxHeight),
+      diagramTemplate(
+        registration.id,
+        svg,
+        settings.maxHeight,
+        registration.blockUuid,
+      ),
     )
   } catch (error) {
     if (!isCurrent(registration.id, generation)) return
@@ -252,101 +258,42 @@ function viewerFor(id: string) {
   return root ? bindViewer(root) : null
 }
 
-function closeSourceEditor(id: string, discardDraft = true) {
-  const registration = registrations.get(id)
-  if (discardDraft && registration?.sourceBlockUuid) {
-    editorDrafts.delete(registration.sourceBlockUuid)
-  }
-  findDiagramElement(id)
-    ?.querySelector<HTMLElement>('.better-mermaid__editor')
-    ?.remove()
-}
-
-function openSourceEditor(id: string) {
+async function openSourceEditor(id: string) {
   const registration = registrations.get(id)
   const snapshot = snapshots.get(id)
-  const root = findDiagramElement(id)
-  if (!registration?.sourceBlockUuid || !snapshot || !root) return
+  if (!registration?.sourceBlockUuid || !snapshot) return
 
-  const existing = root.querySelector<HTMLTextAreaElement>(
-    '.better-mermaid__editor-textarea',
-  )
-  if (existing) {
-    existing.focus()
-    return
+  const sourceBlockUuid = registration.sourceBlockUuid
+  try {
+    const { openMonacoEditor } = await import('./monaco')
+    logseq.setMainUIInlineStyle({
+      position: 'fixed',
+      zIndex: 10000,
+      inset: 0,
+      width: '100vw',
+      height: '100vh',
+    })
+    logseq.showMainUI({ autoFocus: true })
+    openMonacoEditor({
+      source: snapshot.source,
+      dark: currentTheme === 'dark',
+      async onSave(source) {
+        const block = await logseq.Editor.getBlock(sourceBlockUuid)
+        if (!block) throw new Error('找不到 Mermaid 源码块')
+        await logseq.Editor.updateBlock(
+          sourceBlockUuid,
+          replaceMermaidSource(getBlockText(block), source),
+        )
+      },
+      onClose() {
+        logseq.hideMainUI({ restoreEditingCursor: false })
+      },
+    })
+  } catch (error) {
+    logseq.hideMainUI({ restoreEditingCursor: false })
+    const message = error instanceof Error ? error.message : String(error)
+    logseq.UI.showMsg(`打开 Monaco 编辑器失败：${message}`, 'error')
   }
-
-  const editor = parent.document.createElement('div')
-  editor.className = 'better-mermaid__editor'
-  const header = parent.document.createElement('div')
-  header.className = 'better-mermaid__editor-header'
-  const title = parent.document.createElement('strong')
-  title.textContent = '编辑 Mermaid 源码'
-  const hint = parent.document.createElement('span')
-  hint.textContent = '⌘/Ctrl + Enter 保存 · Esc 取消'
-  header.append(title, hint)
-
-  const textarea = parent.document.createElement('textarea')
-  textarea.className = 'better-mermaid__editor-textarea'
-  textarea.value =
-    editorDrafts.get(registration.sourceBlockUuid) ?? snapshot.source
-  editorDrafts.set(registration.sourceBlockUuid, textarea.value)
-  textarea.spellcheck = false
-  textarea.setAttribute('aria-label', 'Mermaid 源码编辑器')
-
-  const actions = parent.document.createElement('div')
-  actions.className = 'better-mermaid__editor-actions'
-  const cancel = parent.document.createElement('button')
-  cancel.className = 'better-mermaid__button'
-  cancel.textContent = '取消'
-  const save = parent.document.createElement('button')
-  save.className = 'better-mermaid__button better-mermaid__button--primary'
-  save.textContent = '保存'
-  actions.append(cancel, save)
-  editor.append(header, textarea, actions)
-  root.append(editor)
-
-  const saveSource = async () => {
-    save.disabled = true
-    const draft = textarea.value
-    editorDrafts.delete(registration.sourceBlockUuid!)
-    closeSourceEditor(id, false)
-    try {
-      const block = await logseq.Editor.getBlock(registration.sourceBlockUuid!)
-      if (!block) throw new Error('找不到 Mermaid 源码块')
-      await logseq.Editor.updateBlock(
-        registration.sourceBlockUuid!,
-        replaceMermaidSource(getBlockText(block), draft),
-      )
-    } catch (error) {
-      editorDrafts.set(registration.sourceBlockUuid!, draft)
-      openSourceEditor(id)
-      const message = error instanceof Error ? error.message : String(error)
-      logseq.UI.showMsg(`保存 Mermaid 失败：${message}`, 'error')
-    }
-  }
-
-  cancel.addEventListener('click', () => closeSourceEditor(id))
-  save.addEventListener('click', () => void saveSource())
-  textarea.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      closeSourceEditor(id)
-    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault()
-      void saveSource()
-    } else if (event.key === 'Tab') {
-      event.preventDefault()
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      textarea.setRangeText('  ', start, end, 'end')
-      editorDrafts.set(registration.sourceBlockUuid!, textarea.value)
-    }
-  })
-  textarea.addEventListener('input', () => {
-    editorDrafts.set(registration.sourceBlockUuid!, textarea.value)
-  })
-  textarea.focus()
 }
 
 async function main() {
@@ -378,7 +325,7 @@ async function main() {
       viewerFor(event.dataset.diagramId ?? '')?.fit()
     },
     editSource(event: { dataset: DOMStringMap }) {
-      openSourceEditor(event.dataset.diagramId ?? '')
+      void openSourceEditor(event.dataset.diagramId ?? '')
     },
     async toggleSource(event: { dataset: DOMStringMap }) {
       const registration = registrations.get(event.dataset.diagramId ?? '')
@@ -449,7 +396,6 @@ async function main() {
     snapshots.clear()
     diagramCache.clear()
     errorCache.clear()
-    editorDrafts.clear()
     generations.clear()
     renderKeys.clear()
     pendingRefreshes.clear()

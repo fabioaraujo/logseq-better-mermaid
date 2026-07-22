@@ -13,11 +13,16 @@ export function errorTemplate(id: string, message: string): string {
   return `<div id="${id}" class="better-mermaid"><div class="better-mermaid__state better-mermaid__error"><strong>Mermaid 语法错误</strong>${escapeHtml(message.slice(0, 800))}</div></div>`
 }
 
-export function diagramTemplate(id: string, svg: string, maxHeight: number): string {
+export function diagramTemplate(
+  id: string,
+  svg: string,
+  maxHeight: number,
+  viewKey: string,
+): string {
   const imageSource = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
   const { width, height } = getSvgDimensions(svg)
   return `
-    <div id="${id}" class="better-mermaid">
+    <div id="${id}" class="better-mermaid" data-view-key="${viewKey}">
       <div class="better-mermaid__frame">
         <div class="better-mermaid__toolbar" aria-label="Mermaid 图表工具栏">
           <button class="better-mermaid__button" data-on-click="zoomOut" data-diagram-id="${id}" title="缩小">−</button>
