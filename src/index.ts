@@ -18,6 +18,7 @@ import {
   errorTemplate,
   loadingTemplate,
 } from './templates'
+import { STARTER_MERMAID } from './starter'
 import type {
   DiagramRegistration,
   DiagramSnapshot,
@@ -356,7 +357,7 @@ async function main() {
     await logseq.Editor.insertAtEditingCursor('{{renderer :better-mermaid}}')
     await logseq.Editor.insertBlock(
       event.uuid,
-      '```mermaid\nflowchart LR\n  A[想法] --> B[Better Mermaid]\n```',
+      STARTER_MERMAID,
       { sibling: false },
     )
   })

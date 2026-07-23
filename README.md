@@ -36,7 +36,7 @@ The Mermaid source remains a standard child code block. Use **Edit** on the diag
 2. Enable Developer mode in Logseq settings.
 3. Open Plugins, choose **Load unpacked plugin**, and select this repository.
 
-Alternatively, download `logseq-better-mermaid-0.1.3.zip` from GitHub Releases and load its extracted directory.
+Alternatively, download `logseq-better-mermaid-0.1.4.zip` from GitHub Releases and load its extracted directory.
 
 ## Development
 

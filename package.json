@@ -1,6 +1,6 @@
 {
   "name": "logseq-better-mermaid",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Reliable, theme-aware Mermaid diagrams for Logseq.",
   "author": "MMMartt",

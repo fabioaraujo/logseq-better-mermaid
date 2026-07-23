@@ -24,7 +24,7 @@
 - {{renderer :better-mermaid}}
   - ```mermaid
     flowchart LR
-      A[想法] --> B[Better Mermaid]
+      A[Idea] --> B[Better Mermaid]
     ```
 ````
 
@@ -36,7 +36,7 @@ Mermaid 源码仍是标准子代码块。点击图表工具栏中的 **编辑** 
 2. 在 Logseq 设置中启用 Developer mode。
 3. 打开 Plugins，选择 **Load unpacked plugin**，然后选择本仓库。
 
-也可以从 GitHub Releases 下载 `logseq-better-mermaid-0.1.3.zip`，解压后通过 Load unpacked plugin 安装。
+也可以从 GitHub Releases 下载 `logseq-better-mermaid-0.1.4.zip`，解压后通过 Load unpacked plugin 安装。
 
 ## 验证
 
