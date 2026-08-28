@@ -35,6 +35,8 @@ export function diagramTemplate(
           <button class="better-mermaid__button" data-on-click="toggleSource" data-diagram-id="${id}" title="${t('sourceTitle')}">${t('source')}</button>
           <button class="better-mermaid__button" data-on-click="exportSvg" data-diagram-id="${id}">SVG</button>
           <button class="better-mermaid__button" data-on-click="exportPng" data-diagram-id="${id}">PNG</button>
+          <span class="better-mermaid__separator"></span>
+          <button class="better-mermaid__button" data-on-click="resizeHeight" data-diagram-id="${id}" title="Aumentar altura">↓</button>
         </div>
         <div class="better-mermaid__viewport" data-max-height="${maxHeight}" title="${t('viewportHint')}">
           <div class="better-mermaid__canvas"><img class="better-mermaid__image" draggable="false" data-width="${width}" data-height="${height}" width="${width}" height="${height}" src="${imageSource}" alt="Mermaid diagram" /></div>
