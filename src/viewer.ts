@@ -1,6 +1,7 @@
 export type ViewerController = {
   fit: () => void
   zoomBy: (factor: number) => void
+  resizeHeight: (delta: number) => void
 }
 
 type ViewerState = {
@@ -88,6 +89,13 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
     render()
   }
 
+  function resizeHeight(delta: number) {
+    const newHeight = Math.max(96, viewport.clientHeight + delta)
+    viewport.style.height = `${newHeight}px`
+    state.viewportHeight = newHeight
+    render()
+  }
+
   const controller: ViewerController = {
     fit,
     zoomBy(factor) {
@@ -97,6 +105,9 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
         bounds.left + bounds.width / 2,
         bounds.top + bounds.height / 2,
       )
+    },
+    resizeHeight(delta) {
+      resizeHeight(delta)
     },
   }
   controllers.set(root, controller)
@@ -143,6 +154,18 @@ export function bindViewer(root: HTMLElement): ViewerController | null {
   viewport.addEventListener('pointerup', stopDragging, { capture: true })
   viewport.addEventListener('pointercancel', stopDragging, { capture: true })
   viewport.addEventListener('dblclick', fit)
+
+  root.addEventListener('click', (event) => {
+    const button = event.target as HTMLElement
+    const onClick = button.dataset['onClick']
+    if (!onClick) return
+
+    switch (onClick) {
+      case 'resizeHeight':
+        resizeHeight(20)
+        break
+    }
+  })
 
   requestAnimationFrame(() => {
     if (savedStates.has(viewKey)) render()
